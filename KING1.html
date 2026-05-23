@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KING-Thai-V2 🇹🇭👑 - Smart Save & Cooldown</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@200;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --neon-red: #ff003c; --neon-gold: #ffd700; --neon-white: #ffffff; --neon-green: #00ff6a; --panel-bg: rgba(10, 10, 10, 0.9); }
+        * { box-sizing: border-box; font-family: 'Kanit', sans-serif; user-select: none; }
+        body { margin: 0; padding: 0; background: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+
+        /* --- ไอคอนมงกุฎลอย --- */
+        #floating-icon {
+            position: fixed; top: 20px; right: 20px; width: 55px; height: 55px;
+            background: rgba(0,0,0,0.8); border: 2px solid var(--neon-green); border-radius: 15px;
+            display: flex; justify-content: center; align-items: center; font-size: 28px;
+            cursor: pointer; z-index: 1000; box-shadow: 0 0 15px rgba(0, 255, 106, 0.4);
+            transition: 0.3s;
+        }
+        #floating-icon:active { transform: scale(0.9); }
+
+        /* --- หน้าจอโหลด --- */
+        #loader {
+            position: absolute; inset: 0; z-index: 9999; display: none; flex-direction: column; 
+            justify-content: center; align-items: center; background: rgba(0,0,0,0.95); transition: 0.5s;
+            border-radius: 15px;
+        }
+        .thai-logo { font-size: 70px; filter: drop-shadow(0 0 20px var(--neon-red)); animation: pulse 1.5s infinite; }
+        .loading-text { margin-top: 20px; font-size: 14px; color: var(--neon-white); letter-spacing: 2px; font-weight: bold; }
+        .progress-box { width: 80%; max-width: 220px; height: 3px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 10px; overflow: hidden; }
+        .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #ed1c24, #ffffff, #241d73); transition: 0.1s; }
+
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } }
+
+        /* --- โครงสร้างพาเนลหลัก --- */
+        .main-container { 
+            position: relative; width: 95%; max-width: 450px; 
+            height: 85vh; max-height: 400px; display: none; flex-direction: column; 
+        }
+        .glass-panel {
+            background: url('./4446.png') no-repeat center center; background-size: cover;
+            flex: 1; border-radius: 15px; position: relative; display: flex;
+            border: 1px solid rgba(255,255,255,0.1); overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+        .glass-panel::after { content: ""; position: absolute; inset: 0; background: var(--panel-bg); backdrop-filter: blur(8px); z-index: 0; }
+
+        .top-bar { height: 45px; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; margin-bottom: 5px; z-index: 2; }
+        .brand-name { color: var(--neon-gold); font-weight: 800; font-size: 16px; text-shadow: 0 0 10px rgba(255,215,0,0.5); }
+
+        .body-content { display: flex; width: 100%; height: 100%; z-index: 1; position: relative; }
+        
+        .nav-side { 
+            width: 80px; flex-shrink: 0; display: flex; flex-direction: column; 
+            padding: 15px 5px; gap: 10px; background: rgba(0,0,0,0.6); z-index: 2; border-right: 1px solid rgba(255,255,255,0.05); 
+        }
+        .nav-item { 
+            font-size: 11px; color: rgba(255,255,255,0.5); cursor: pointer; transition: 0.3s; 
+            text-align: center; padding: 10px 0; border-radius: 10px; font-weight: bold;
+        }
+        .nav-item.active { background: var(--neon-red); color: #fff; box-shadow: 0 0 15px var(--neon-red); }
+
+        .main-view { flex: 1; padding: 10px; padding-bottom: 70px; overflow-y: auto; scrollbar-width: none; }
+
+        .card { 
+            background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px;
+            margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+            border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;
+        }
+        .card.active-card { background: rgba(0, 255, 106, 0.1); border-color: var(--neon-green); }
+        .card-info span { display: block; font-size: 12px; font-weight: 500; color: #fff; white-space: nowrap; }
+        .card-info small { font-size: 9px; color: var(--neon-gold); font-weight: bold; }
+
+        .thai-switch {
+            width: 36px; height: 18px; background: #333; border-radius: 20px;
+            position: relative; cursor: pointer; transition: 0.3s; flex-shrink: 0;
+        }
+        .thai-switch::before {
+            content: ""; position: absolute; width: 14px; height: 14px; background: #eee;
+            top: 2px; left: 2px; border-radius: 50%; transition: 0.3s;
+        }
+        .checked-sw { background: var(--neon-green); }
+        .checked-sw::before { left: 20px; background: #fff; box-shadow: 0 0 10px var(--neon-green); }
+
+        .slider-wrap { margin-bottom: 15px; padding: 5px 10px; display: none; background: rgba(0,0,0,0.3); border-radius: 8px; }
+        .custom-range { -webkit-appearance: none; width: 100%; height: 3px; background: #444; outline: none; border-radius: 5px; }
+        .custom-range::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; background: var(--neon-gold); cursor: pointer; border-radius: 50%; }
+
+        /* --- Footer Zone จัด Layout ใหม่ 4 ปุ่ม --- */
+        .action-footer {
+            position: absolute; bottom: 0; left: 80px; right: 0; height: 60px;
+            background: rgba(0,0,0,0.85); border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex; justify-content: space-between; align-items: center; padding: 0 5px; gap: 5px; z-index: 10;
+        }
+        
+        .btn-small {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: #aaa;
+            padding: 8px 0; border-radius: 8px; cursor: pointer; font-size: 10px; font-weight: bold; transition: 0.2s;
+            flex: 1; text-align: center; white-space: nowrap;
+        }
+        .btn-small:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        .btn-start {
+            background: linear-gradient(45deg, #ff003c, #8a0020); border: 1px solid #ff4d79; color: white;
+            padding: 10px 0; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: bold;
+            flex: 1.8; text-align: center; box-shadow: 0 0 15px rgba(255, 0, 60, 0.4);
+            transition: 0.3s; white-space: nowrap;
+        }
+        .btn-start.active-mode { background: linear-gradient(45deg, #00ff6a, #008035); border-color: #33ff8f; box-shadow: 0 0 15px rgba(0, 255, 106, 0.4); }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="floating-icon" onclick="togglePanel(true)">👑</div>
+
+    <div class="main-container" id="panel">
+        <div class="top-bar">
+            <div class="brand-name">KING-Thai-V2 🇹🇭</div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span id="status-dot" style="font-size: 10px; color: #ff003c; font-weight: bold;">🔴 IDLE</span>
+                <span style="font-size: 12px; color: #ff4d79; cursor: pointer; font-weight: bold;" onclick="togglePanel(false)">[X]</span>
+            </div>
+        </div>
+
+        <div class="glass-panel">
+            <div class="body-content">
+                <div class="nav-side">
+                    <div class="nav-item active" onclick="tab(0, this)">การยิง</div>
+                    <div class="nav-item" onclick="tab(1, this)">กันแบน</div>
+                    <div class="nav-item" onclick="tab(2, this)">ตั้งค่า UI</div>
+                    <div class="nav-item" onclick="tab(3, this)">ข้อมูล</div>
+                </div>
+
+                <div class="main-view">
+                    <div id="v0">
+                        <div class="card" id="c1">
+                            <div class="card-info"><small>SYSTEM</small><span>ระบบบายพาส (Bypass)</span></div>
+                            <div class="thai-switch" data-name="ระบบบายพาส" id="sw1" onclick="toggleBtn(this, 'c1')"></div>
+                        </div>
+                        <div class="card" id="c2">
+                            <div class="card-info"><small>COMBAT</small><span>ดึงเป้าเข้าหัว 75%</span></div>
+                            <div class="thai-switch" data-name="ดึงเป้าเข้าหัว" id="sw2" onclick="toggleBtn(this, 'c2', 's1')"></div>
+                        </div>
+                        <div class="slider-wrap" id="s1">
+                            <span style="font-size: 10px; color: var(--neon-gold); display:block; margin-bottom:5px;">ความแรง: <span id="v-val">50%</span></span>
+                            <input type="range" class="custom-range" id="rng1" oninput="document.getElementById('v-val').innerText = this.value + '%'">
+                        </div>
+                        <div class="card" id="c3">
+                            <div class="card-info"><small>COMBAT</small><span>ล็อกเป้านิ่ง 5%</span></div>
+                            <div class="thai-switch" data-name="ล็อกเป้านิ่ง" id="sw3" onclick="toggleBtn(this, 'c3')"></div>
+                        </div>
+                    </div>
+
+                    <div id="v1" class="hidden">
+                        <div class="card" id="c4">
+                            <div class="card-info"><small>SECURITY</small><span>ป้องกันการตรวจสอบ</span></div>
+                            <div class="thai-switch" data-name="ป้องกันการตรวจสอบ" id="sw4" onclick="toggleBtn(this, 'c4')"></div>
+                        </div>
+                        <div class="card" id="c5">
+                            <div class="card-info"><small>SECURITY</small><span>ล้างประวัติ (Clean Log)</span></div>
+                            <div class="thai-switch" data-name="ล้างประวัติ" id="sw5" onclick="toggleBtn(this, 'c5')"></div>
+                        </div>
+                    </div>
+
+                    <div id="v2" class="hidden">
+                        <div class="card" id="c6">
+                            <div class="card-info"><small>VISUAL</small><span>ขอบไฟ RGB(บัค)</span></div>
+                            <div class="thai-switch" data-name="ขอบไฟเรืองแสง" id="sw6" onclick="toggleBtn(this, 'c6')"></div>
+                        </div>
+                    </div>
+
+                    <div id="v3" class="hidden">
+                        <div style="font-size:12px; color:rgba(255,255,255,0.8); line-height:2.2; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px;">
+                            🚀 เวอร์ชัน: <span style="color:var(--neon-gold)">KING-Thai-V2</span><br>
+                            👑 ผู้พัฒนา: <span style="color:var(--neon-red)">king_rooster002</span><br>
+                            🤖 เสียง AI: <span style="color:var(--neon-green)">พร้อมใช้งาน</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-footer">
+                    <div class="btn-small" onclick="useSavedSettings()" id="btn-load">โหลด</div>
+                    <div class="btn-small" onclick="resetSettings()">รีเซ็ต</div>
+                    <div class="btn-start" id="btn-inject" onclick="injectPanel()">🚀 เริ่มพาเนล</div>
+                    <div class="btn-small" onclick="saveSettings()" id="btn-save">เซฟ</div>
+                </div>
+            </div>
+
+            <div id="loader">
+                <div class="thai-logo">👑</div>
+                <div class="loading-text" id="load-text">กำลังรันระบบเข้าเกม...</div>
+                <div class="progress-box"><div class="progress-fill" id="p-bar"></div></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const synth = window.speechSynthesis;
+        let isPanelRunning = false;
+        let isCooldown = false; // ตัวแปรคูลดาวน์
+
+        // เปิด/ปิด พาเนล
+        function togglePanel(show) {
+            if (show) {
+                document.getElementById('floating-icon').style.display = 'none';
+                document.getElementById('panel').style.display = 'flex';
+                speakThai("เปิดพาเนล");
+            } else {
+                document.getElementById('panel').style.display = 'none';
+                document.getElementById('floating-icon').style.display = 'flex';
+            }
+        }
+
+        // ระบบเสียง AI
+        function speakThai(text) {
+            if (synth.speaking) synth.cancel(); 
+            const utterThis = new SpeechSynthesisUtterance(text);
+            utterThis.lang = 'th-TH';
+            utterThis.rate = 1.1;
+            synth.speak(utterThis);
+        }
+
+        // --- ระบบเปิดปิดสวิตช์ฟังก์ชัน (พร้อม Cooldown 2 วิ) ---
+        function toggleBtn(el, cardId, sliderId) {
+            if (isCooldown) return; // ถ้ายอดคูลดาวน์ทำงานอยู่ กดไม่ได้
+
+            let isChecked = el.classList.toggle('checked-sw');
+            let card = document.getElementById(cardId);
+            card.classList.toggle('active-card');
+            
+            if(sliderId) {
+                document.getElementById(sliderId).style.display = isChecked ? 'block' : 'none';
+            }
+
+            let funcName = el.getAttribute('data-name');
+            speakThai(isChecked ? 'เปิด ' + funcName : 'ปิด ' + funcName);
+
+            // เริ่มทำงาน Cooldown
+            isCooldown = true;
+            let allSwitches = document.querySelectorAll('.thai-switch');
+            
+            // ทำให้สวิตช์ทั้งหมดจางลงและกดไม่ได้ชั่วคราว
+            allSwitches.forEach(sw => {
+                sw.style.opacity = "0.5";
+                sw.style.cursor = "not-allowed";
+            });
+
+            // ปลดล็อกหลังจากผ่านไป 2 วินาที
+            setTimeout(() => {
+                isCooldown = false;
+                allSwitches.forEach(sw => {
+                    sw.style.opacity = "1";
+                    sw.style.cursor = "pointer";
+                });
+            }, 2000);
+        }
+
+        // --- ระบบบันทึก (Save) ---
+        function saveSettings() {
+            let data = {};
+            document.querySelectorAll('.thai-switch').forEach(sw => {
+                data[sw.id] = sw.classList.contains('checked-sw');
+            });
+            localStorage.setItem('kingV2_config', JSON.stringify(data));
+            speakThai('บันทึกการตั้งค่าแล้วค่ะ');
+            
+            let btn = document.getElementById('btn-save'); 
+            btn.innerText = "✔";
+            btn.style.color = "#00ff6a";
+            setTimeout(() => { btn.innerText = "เซฟ"; btn.style.color = "#aaa"; }, 2000);
+        }
+
+        // --- ระบบใช้งานการบันทึก (Load / โหลดค่าที่เซฟ) ---
+        function useSavedSettings() {
+            let saved = localStorage.getItem('kingV2_config');
+            let btnLoad = document.getElementById('btn-load');
+            
+            // เช็คว่ามีค่าที่เซฟไว้หรือไม่ ถ้าไม่มีให้แจ้งเตือนและหยุดการทำงาน
+            if(!saved) {
+                speakThai("ต้องกดเซฟการตั้งค่าก่อน ถึงจะใช้งานการบันทึกได้ค่ะ");
+                let oldText = btnLoad.innerText;
+                btnLoad.innerText = "❌ ไม่มีเซฟ";
+                btnLoad.style.color = "#ff003c";
+                setTimeout(() => { btnLoad.innerText = oldText; btnLoad.style.color = "#aaa"; }, 2000);
+                return; // หยุดการทำงาน
+            }
+            
+            // ถ้ามีค่าที่เซฟไว้ ให้โหลดขึ้นมา
+            let data = JSON.parse(saved);
+            for(let id in data) {
+                if(data[id]) {
+                    let sw = document.getElementById(id);
+                    if(sw && !sw.classList.contains('checked-sw')) {
+                        sw.classList.add('checked-sw');
+                        sw.parentElement.classList.add('active-card');
+                        if(id === 'sw2') document.getElementById('s1').style.display = 'block';
+                    }
+                }
+            }
+            speakThai("โหลดการตั้งค่าที่บันทึกไว้สำเร็จ");
+            btnLoad.innerText = "✔ โหลดแล้ว";
+            btnLoad.style.color = "#00ff6a";
+            setTimeout(() => { btnLoad.innerText = "โหลด"; btnLoad.style.color = "#aaa"; }, 2000);
+        }
+
+        // ระบบฉีดเข้าเกม (Inject)
+        function injectPanel() {
+            if (isPanelRunning) {
+                speakThai("ระบบทำงานอยู่แล้ว");
+                return;
+            }
+
+            let btn = document.getElementById('btn-inject');
+            let loader = document.getElementById('loader');
+            let pBar = document.getElementById('p-bar');
+            let loadText = document.getElementById('load-text');
+
+            speakThai("กำลังรันระบบเข้าเกม รอสักครู่");
+            loader.style.display = 'flex';
+            
+            let w = 0;
+            let iv = setInterval(() => {
+                w += Math.floor(Math.random() * 5) + 2;
+                if(w > 50) loadText.innerText = "Injecting...";
+                if(w > 80) loadText.innerText = "Bypass System...";
+                
+                if(w >= 100) {
+                    w = 100; clearInterval(iv);
+                    setTimeout(() => {
+                        loader.style.display = 'none';
+                        btn.innerText = "🟢 ACTIVE";
+                        btn.classList.add('active-mode');
+                        document.getElementById('status-dot').innerHTML = '🟢 ON';
+                        document.getElementById('status-dot').style.color = '#00ff6a';
+                        isPanelRunning = true;
+                        speakThai("ระบบพร้อมใช้งานในเกมแล้ว");
+                    }, 500);
+                }
+                pBar.style.width = w + '%';
+            }, 40);
+        }
+
+        // ระบบรีเซ็ต (Reset)
+        function resetSettings() {
+            localStorage.removeItem('kingV2_config');
+            document.querySelectorAll('.thai-switch').forEach(sw => {
+                sw.classList.remove('checked-sw');
+                sw.parentElement.classList.remove('active-card');
+            });
+            document.querySelectorAll('.slider-wrap').forEach(s => s.style.display = 'none');
+            
+            isPanelRunning = false;
+            let btn = document.getElementById('btn-inject');
+            btn.innerText = "🚀 เริ่มพาเนล";
+            btn.classList.remove('active-mode');
+            document.getElementById('status-dot').innerHTML = '🔴 IDLE';
+            document.getElementById('status-dot').style.color = '#ff003c';
+
+            speakThai('ล้างข้อมูลและรีเซ็ตระบบแล้ว');
+        }
+
+        // เปลี่ยนแท็บเมนู
+        function tab(idx, el) {
+            for(let i=0; i<4; i++) document.getElementById('v'+i).classList.add('hidden');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('v'+idx).classList.remove('hidden');
+            el.classList.add('active');
+        }
+    </script>
+</body>
+</html>
+
